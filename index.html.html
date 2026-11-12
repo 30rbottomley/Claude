@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Chat - Private</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- ======================================================= -->
+    <!-- ADD YOUR SUPABASE CREDENTIALS HERE                      -->
+    <!-- ======================================================= -->
+    <script>
+        const SUPABASE_URL = 'https://okhdazthnrrkqgvbkdto.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9raGRhenRobnJya3FndmJrZHRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0NDc2OTEsImV4cCI6MjExMDAyMzY5MX0.ap0sdPxiSeLttIJeYcx_RNn8L27cPvcgXTVxtvrEMHQ';
+    </script>
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom scrollbar for chat */
+        .chat-scroll::-webkit-scrollbar { width: 6px; }
+        .chat-scroll::-webkit-scrollbar-track { background: transparent; }
+        .chat-scroll::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        .dark .chat-scroll::-webkit-scrollbar-thumb { background-color: #475569; }
+        
+        /* Markdown simple styling for Claude's responses */
+        .message-content pre {
+            background-color: #1e293b;
+            color: #f8fafc;
+            padding: 10px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
+        .message-content code {
+            font-family: monospace;
+            background-color: rgba(0,0,0,0.1);
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+        .dark .message-content code {
+            background-color: rgba(255,255,255,0.1);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 h-screen flex flex-col font-sans overflow-hidden transition-colors duration-200">
+
+    <!-- ==================== AUTHENTICATION SECTION ==================== -->
+    <div id="auth-section" class="flex-1 flex items-center justify-center p-4 transition-all duration-300">
+        <div class="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100 dark:border-slate-700">
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 mb-4">
+                    <i class="fa-solid fa-lock text-3xl"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Private Portal</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">Sign in to access Claude</p>
+            </div>
+
+            <form id="auth-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+                    <input type="email" id="email" required class="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition text-slate-900 dark:text-white" placeholder="you@example.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>
+                    <input type="password" id="password" required class="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition text-slate-900 dark:text-white" placeholder="••••••••">
+                </div>
+                
+                <div id="auth-error" class="text-red-500 text-sm hidden bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-100 dark:border-red-800"></div>
+
+                <div class="pt-2">
+                    <button type="button" id="btn-login" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg transition shadow-sm flex justify-center items-center gap-2">
+                        <i class="fa-solid fa-right-to-bracket"></i> Login
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== MAIN CHAT SECTION ==================== -->
+    <div id="chat-section" class="hidden flex-1 flex flex-col h-full max-w-5xl mx-auto w-full bg-white dark:bg-slate-800 shadow-2xl border-x border-slate-200 dark:border-slate-700 transition-colors duration-200">
+        
+        <!-- Header -->
+        <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex justify-between items-center z-10 transition-colors duration-200">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-indigo-600 dark:bg-indigo-500 text-white flex items-center justify-center shadow-md">
+                    <i class="fa-solid fa-robot text-lg"></i>
+                </div>
+                <div>
+                    <h2 class="font-bold text-lg text-slate-800 dark:text-white leading-tight">Claude AI</h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400" id="user-email-display">user@example.com</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="btn-clear-chat" class="p-2.5 text-slate-500 dark:text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-slate-700 rounded-full transition" title="Clear Chat History">
+                    <i class="fa-solid fa-trash-can text-lg"></i>
+                </button>
+                <button id="btn-theme" class="p-2.5 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-700 rounded-full transition" title="Toggle Theme">
+                    <i class="fa-solid fa-moon text-lg" id="theme-icon"></i>
+                </button>
+                <button id="btn-settings" class="p-2.5 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-700 rounded-full transition" title="Settings">
+                    <i class="fa-solid fa-gear text-lg"></i>
+                </button>
+                <button id="btn-logout" class="p-2.5 text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-slate-700 rounded-full transition" title="Log Out">
+                    <i class="fa-solid fa-arrow-right-from-bracket text-lg"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- API Key Warning Banner -->
+        <div id="api-key-warning" class="hidden bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700/50 px-6 py-3 flex justify-between items-center text-sm text-amber-800 dark:text-amber-200">
+            <span><i class="fa-solid fa-triangle-exclamation mr-2"></i> Configure your Anthropic API key to start chatting.</span>
+            <button class="font-bold underline hover:text-amber-900 dark:hover:text-amber-100" onclick="document.getElementById('settings-modal').classList.remove('hidden')">Settings</button>
+        </div>
+
+        <!-- Chat Area -->
+        <div id="chat-container" class="flex-1 overflow-y-auto p-6 chat-scroll space-y-6 bg-slate-50/50 dark:bg-slate-900/50 transition-colors duration-200">
+            <!-- Initial Empty State -->
+            <div id="empty-state" class="text-center text-slate-400 dark:text-slate-500 mt-10 text-sm">
+                <i class="fa-regular fa-comments text-4xl mb-3 opacity-50"></i>
+                <p>Send a message to start the conversation.</p>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-4 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 transition-colors duration-200">
+            <form id="chat-form" class="relative max-w-4xl mx-auto flex items-end gap-2">
+                <textarea id="chat-input" rows="1" class="w-full bg-slate-100 dark:bg-slate-700 border border-transparent focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-400 dark:focus:border-indigo-500 rounded-2xl pl-4 pr-12 py-3 outline-none resize-none transition chat-scroll max-h-32 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-400" placeholder="Message Claude..."></textarea>
+                <button type="submit" id="btn-send" class="absolute right-2 bottom-1.5 p-2 w-10 h-10 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl shadow-md transition flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== SETTINGS MODAL ==================== -->
+    <div id="settings-modal" class="hidden fixed inset-0 bg-slate-900/40 dark:bg-slate-900/80 backdrop-blur-sm z-50 flex justify-center items-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all border border-slate-200 dark:border-slate-700">
+            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
+                <h3 class="font-bold text-lg text-slate-800 dark:text-white"><i class="fa-solid fa-key mr-2 text-indigo-500 dark:text-indigo-400"></i> Settings</h3>
+                <button id="btn-close-settings" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Anthropic API Key</label>
+                    <input type="password" id="api-key-input" class="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition font-mono text-sm text-slate-900 dark:text-white" placeholder="sk-ant-api03-...">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">Saved securely in this browser. Never sent to our servers.</p>
+                </div>
+                
+                <div class="pt-2 border-t border-slate-100 dark:border-slate-700">
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        <div class="flex items-center h-5">
+                            <input id="use-proxy-checkbox" type="checkbox" class="w-4 h-4 text-indigo-600 bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded focus:ring-indigo-500">
+                        </div>
+                        <div class="text-sm">
+                            <p class="font-medium text-slate-700 dark:text-slate-300">Use CORS Proxy (Required for Web)</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Routes API requests through a public proxy so Anthropic doesn't block the browser.</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-700 flex justify-end">
+                <button id="btn-save-settings" class="bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-medium py-2 px-5 rounded-lg transition shadow-sm">
+                    Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== JAVASCRIPT LOGIC ==================== -->
+    <script>
+        // ---------------------------------------------------------
+        // SUPABASE INITIALIZATION
+        // ---------------------------------------------------------
+        let supabaseClient;
+        try {
+            // Use the global 'supabase' object from the CDN to create our client
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } catch (error) {
+            console.error("Supabase config error:", error);
+        }
+
+        // ---------------------------------------------------------
+        // STATE VARIABLES
+        // ---------------------------------------------------------
+        let currentUser = null;
+        let chatHistory = [];
+        let anthropicApiKey = localStorage.getItem('anthropic_api_key') || '';
+        let useProxy = localStorage.getItem('anthropic_use_proxy') !== 'false'; // default true
+        let isDarkMode = localStorage.getItem('theme') === 'dark';
+
+        // ---------------------------------------------------------
+        // DOM ELEMENTS
+        // ---------------------------------------------------------
+        const authSection = document.getElementById('auth-section');
+        const chatSection = document.getElementById('chat-section');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const authError = document.getElementById('auth-error');
+        const btnLogin = document.getElementById('btn-login');
+        const btnLogout = document.getElementById('btn-logout');
+        
+        const userEmailDisplay = document.getElementById('user-email-display');
+        const chatContainer = document.getElementById('chat-container');
+        const emptyState = document.getElementById('empty-state');
+        const chatInput = document.getElementById('chat-input');
+        const chatForm = document.getElementById('chat-form');
+        const btnSend = document.getElementById('btn-send');
+        const btnClearChat = document.getElementById('btn-clear-chat');
+        
+        const settingsModal = document.getElementById('settings-modal');
+        const btnSettings = document.getElementById('btn-settings');
+        const btnCloseSettings = document.getElementById('btn-close-settings');
+        const btnSaveSettings = document.getElementById('btn-save-settings');
+        const apiKeyInput = document.getElementById('api-key-input');
+        const useProxyCheckbox = document.getElementById('use-proxy-checkbox');
+        const apiKeyWarning = document.getElementById('api-key-warning');
+
+        const btnTheme = document.getElementById('btn-theme');
+        const themeIcon = document.getElementById('theme-icon');
+
+        // ---------------------------------------------------------
+        // INITIALIZATION
+        // ---------------------------------------------------------
+        window.addEventListener('DOMContentLoaded', async () => {
+            initTheme();
+            
+            if(!supabaseClient) {
+                showAuthError("Supabase not configured. Check the HTML source variables.");
+                return;
+            }
+
+            // Check current session
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            updateUIForUser(session?.user);
+
+            // Listen for auth changes
+            supabaseClient.auth.onAuthStateChange((_event, session) => {
+                updateUIForUser(session?.user);
+            });
+
+            // Init Settings
+            apiKeyInput.value = anthropicApiKey;
+            useProxyCheckbox.checked = useProxy;
+            checkApiKeyStatus();
+            
+            // Auto-resize textarea
+            chatInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight < 128 ? this.scrollHeight : 128) + 'px';
+            });
+            
+            // Submit on Enter (Shift+Enter for newline)
+            chatInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (this.value.trim() !== '') chatForm.dispatchEvent(new Event('submit'));
+                }
+            });
+        });
+
+        // ---------------------------------------------------------
+        // THEME LOGIC
+        // ---------------------------------------------------------
+        function initTheme() {
+            if (isDarkMode || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+                themeIcon.classList.replace('fa-moon', 'fa-sun');
+                isDarkMode = true;
+            } else {
+                document.documentElement.classList.remove('dark');
+                themeIcon.classList.replace('fa-sun', 'fa-moon');
+                isDarkMode = false;
+            }
+        }
+
+        btnTheme.addEventListener('click', () => {
+            isDarkMode = !isDarkMode;
+            if (isDarkMode) {
+                document.documentElement.classList.add('dark');
+                themeIcon.classList.replace('fa-moon', 'fa-sun');
+                localStorage.setItem('theme', 'dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+                themeIcon.classList.replace('fa-sun', 'fa-moon');
+                localStorage.setItem('theme', 'light');
+            }
+        });
+
+        // ---------------------------------------------------------
+        // AUTHENTICATION LOGIC
+        // ---------------------------------------------------------
+        function updateUIForUser(user) {
+            currentUser = user;
+            if (user) {
+                authSection.classList.add('hidden');
+                chatSection.classList.remove('hidden');
+                userEmailDisplay.textContent = user.email;
+                loadChatHistory();
+            } else {
+                authSection.classList.remove('hidden');
+                chatSection.classList.add('hidden');
+                clearChatUI();
+            }
+        }
+
+        btnLogin.addEventListener('click', async () => {
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+            if (!email || !password) return showAuthError("Email and password required");
+            
+            setLoading(btnLogin, true, "Logging in...");
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            setLoading(btnLogin, false, '<i class="fa-solid fa-right-to-bracket"></i> Login');
+            
+            if (error) showAuthError(error.message);
+        });
+
+        btnLogout.addEventListener('click', async () => {
+            await supabaseClient.auth.signOut();
+            emailInput.value = '';
+            passwordInput.value = '';
+        });
+
+        function showAuthError(msg) {
+            authError.textContent = msg;
+            authError.classList.remove('hidden');
+        }
+
+        function setLoading(btn, isLoading, text) {
+            btn.disabled = isLoading;
+            if (isLoading) {
+                btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${text}`;
+                btn.classList.add('opacity-70', 'cursor-wait');
+            } else {
+                btn.innerHTML = text;
+                btn.classList.remove('opacity-70', 'cursor-wait');
+            }
+        }
+
+        // ---------------------------------------------------------
+        // SETTINGS & STORAGE LOGIC
+        // ---------------------------------------------------------
+        btnSettings.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+        btnCloseSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
+        
+        btnSaveSettings.addEventListener('click', () => {
+            anthropicApiKey = apiKeyInput.value.trim();
+            useProxy = useProxyCheckbox.checked;
+            
+            localStorage.setItem('anthropic_api_key', anthropicApiKey);
+            localStorage.setItem('anthropic_use_proxy', useProxy);
+            
+            checkApiKeyStatus();
+            settingsModal.classList.add('hidden');
+        });
+
+        function checkApiKeyStatus() {
+            if (!anthropicApiKey) apiKeyWarning.classList.remove('hidden');
+            else apiKeyWarning.classList.add('hidden');
+        }
+
+        function saveChatHistory() {
+            if (currentUser) {
+                localStorage.setItem(`claude_chat_${currentUser.id}`, JSON.stringify(chatHistory));
+            }
+        }
+
+        function loadChatHistory() {
+            if (!currentUser) return;
+            const saved = localStorage.getItem(`claude_chat_${currentUser.id}`);
+            clearChatUI();
+            
+            if (saved) {
+                chatHistory = JSON.parse(saved);
+                if (chatHistory.length > 0) {
+                    emptyState.classList.add('hidden');
+                    chatHistory.forEach(msg => appendMessageUI(msg.role, msg.content));
+                } else {
+                    emptyState.classList.remove('hidden');
+                }
+            } else {
+                chatHistory = [];
+                emptyState.classList.remove('hidden');
+            }
+        }
+
+        btnClearChat.addEventListener('click', () => {
+            if(confirm("Are you sure you want to clear the conversation history?")) {
+                chatHistory = [];
+                saveChatHistory();
+                clearChatUI();
+                emptyState.classList.remove('hidden');
+            }
+        });
+
+        function clearChatUI() {
+            const messages = chatContainer.querySelectorAll('.message-wrapper');
+            messages.forEach(m => m.remove());
+        }
+
+        // ---------------------------------------------------------
+        // CHAT LOGIC (ANTHROPIC API)
+        // ---------------------------------------------------------
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const messageText = chatInput.value.trim();
+            if (!messageText) return;
+            
+            if (!anthropicApiKey) {
+                alert("Please set your Anthropic API Key in Settings first.");
+                settingsModal.classList.remove('hidden');
+                return;
+            }
+
+            // Remove empty state
+            emptyState.classList.add('hidden');
+
+            // 1. Add user message to UI and history
+            appendMessageUI('user', messageText);
+            chatHistory.push({ role: 'user', content: messageText });
+            saveChatHistory();
+            
+            // 2. Reset input
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+            
+            // 3. Show loading indicator
+            const loadingId = appendLoadingIndicator();
+            btnSend.disabled = true;
+
+            try {
+                // Determine API Endpoint
+                const targetUrl = 'https://api.anthropic.com/v1/messages';
+                const endpoint = useProxy 
+                    ? `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+                    : targetUrl;
+
+                // 4. Fetch to Anthropic API
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': anthropicApiKey,
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerously-allow-browser': 'true'
+                    },
+                    body: JSON.stringify({
+                        model: "claude-3-5-sonnet-20241022",
+                        max_tokens: 1024,
+                        messages: chatHistory
+                    })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json().catch(()=>({}));
+                    throw new Error(errData.error?.message || `API Error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // 5. Remove loading, add Claude's response
+                document.getElementById(loadingId).remove();
+                const assistantMessage = data.content[0].text;
+                
+                appendMessageUI('assistant', assistantMessage);
+                chatHistory.push({ role: 'assistant', content: assistantMessage });
+                saveChatHistory();
+
+            } catch (error) {
+                console.error("Chat error:", error);
+                document.getElementById(loadingId)?.remove();
+                
+                let errorMsg = error.message;
+                if (error.message.includes('Failed to fetch') && !useProxy) {
+                    errorMsg = "CORS Error: Please enable 'Use CORS Proxy' in Settings.";
+                }
+                
+                appendMessageUI('system', `<i class="fa-solid fa-triangle-exclamation mr-1"></i> Error: ${errorMsg}`);
+                chatHistory.pop(); // Remove failed user message from memory
+            } finally {
+                btnSend.disabled = false;
+                chatInput.focus();
+            }
+        });
+
+        function appendMessageUI(role, content) {
+            const wrapper = document.createElement('div');
+            wrapper.className = `message-wrapper flex w-full ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+            
+            const inner = document.createElement('div');
+            
+            if (role === 'user') {
+                inner.className = 'max-w-[80%] md:max-w-[70%] rounded-2xl px-5 py-3.5 bg-indigo-600 text-white shadow-sm rounded-tr-sm message-content';
+                inner.textContent = content; 
+            } else if (role === 'assistant') {
+                inner.className = 'max-w-[80%] md:max-w-[70%] rounded-2xl px-5 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 shadow-sm rounded-tl-sm message-content text-base leading-relaxed';
+                
+                let formatted = escapeHTML(content);
+                formatted = formatted.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+                formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
+                formatted = formatted.replace(/\n/g, '<br>');
+                inner.innerHTML = formatted;
+            } else {
+                // System/Error
+                inner.className = 'w-full text-center text-sm text-red-500 bg-red-50 dark:bg-red-900/20 py-2 rounded-lg border border-red-100 dark:border-red-900/50';
+                inner.innerHTML = content;
+            }
+
+            wrapper.appendChild(inner);
+            chatContainer.appendChild(wrapper);
+            scrollToBottom();
+        }
+
+        function appendLoadingIndicator() {
+            const id = 'loading-' + Date.now();
+            const wrapper = document.createElement('div');
+            wrapper.id = id;
+            wrapper.className = `message-wrapper flex w-full justify-start`;
+            wrapper.innerHTML = `
+                <div class="max-w-[80%] md:max-w-[70%] rounded-2xl px-5 py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 shadow-sm rounded-tl-sm flex gap-2 items-center">
+                    <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
+                    <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                    <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+                </div>
+            `;
+            chatContainer.appendChild(wrapper);
+            scrollToBottom();
+            return id;
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    "'": '&#39;',
+                    '"': '&quot;'
+                }[tag] || tag)
+            );
+        }
+    </script>
+</body>
+</html>
